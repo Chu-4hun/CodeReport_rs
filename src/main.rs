@@ -1,7 +1,7 @@
 use std::{fs, path::PathBuf};
 
 use clap::Parser;
-use docx_rs::{Docx, DocxError, IndentLevel, NumberingId, Paragraph, Run};
+use docx_rs::{Docx, DocxError, IndentLevel, NumberingId, Paragraph, Run, SpecialIndentType};
 use glob::glob;
 
 //TODO Doc model
@@ -63,8 +63,8 @@ fn gen_file(input_path: PathBuf, doc: &mut Docx) -> Result<(), DocxError> {
     // let file = fs::File::open(path).unwrap_or(fs::File::create(path).unwrap());
     *doc = doc.to_owned().add_paragraph(
         Paragraph::new()
-            .add_run(Run::new().add_text(input_path.as_path().to_str().unwrap()))
-            .numbering(NumberingId::new(2), IndentLevel::new(0)),
+            .add_run(Run::new().add_text(input_path.as_path().to_str().unwrap()).size(16*2))
+            .numbering(NumberingId::new(2), IndentLevel::new(0)).size(16*2),
     );
     let lines: Vec<String> = fs::read_to_string(input_path)
         .unwrap()
