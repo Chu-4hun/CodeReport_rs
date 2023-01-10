@@ -1,7 +1,7 @@
 use std::{fs, path::PathBuf};
 
 use clap::Parser;
-use docx_rs::{Docx, DocxError, IndentLevel, NumberingId, Paragraph, Run, SpecialIndentType};
+use docx_rs::{Docx, DocxError, IndentLevel, NumberingId, Paragraph, Run};
 use glob::glob;
 
 //TODO Doc model
