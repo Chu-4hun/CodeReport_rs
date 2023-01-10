@@ -39,6 +39,7 @@ fn main() {
         }
         file_extensions.dedup();
     }
+    
     let mut doc = Docx::new();
     for file_extension in file_extensions {
         for entry in glob(&("./**/**/**/**/**/**/**/*.".to_owned() + &file_extension))
@@ -47,7 +48,7 @@ fn main() {
             match entry {
                 Ok(path) => {
                     println!("{:?}", path.to_str().unwrap());
-                    println!("{:?}", gen_file(path, &mut doc));
+                    println!("{:?}", doc.gen_body(path));
                 }
                 Err(e) => println!("{:?}", e),
             }
@@ -58,24 +59,57 @@ fn main() {
     doc.to_owned().build().pack(file).unwrap();
 }
 
-fn gen_file(input_path: PathBuf, doc: &mut Docx) -> Result<(), DocxError> {
-    // let path = std::path::Path::new("./numbering.docx");
-    // let file = fs::File::open(path).unwrap_or(fs::File::create(path).unwrap());
-    *doc = doc.to_owned().add_paragraph(
-        Paragraph::new()
-            .add_run(Run::new().add_text(input_path.as_path().to_str().unwrap()).size(16*2))
-            .numbering(NumberingId::new(2), IndentLevel::new(0)).size(16*2),
-    );
-    let lines: Vec<String> = fs::read_to_string(input_path)
-        .unwrap()
-        .split("\n")
-        .map(str::to_string)
-        .collect();
-    for line in lines {
-        *doc = doc
-            .to_owned()
-            .add_paragraph(Paragraph::new().add_run(Run::new().add_text(line)));
-    }
-
-    Ok(())
+trait GenFile {
+    fn gen_body(&mut self, input_path: PathBuf) -> Result<(), DocxError>;
 }
+impl GenFile for Docx {
+    fn gen_body(&mut self, input_path: PathBuf) -> Result<(), DocxError> {
+        *self = self.to_owned().add_paragraph(
+            Paragraph::new()
+                .add_run(
+                    Run::new()
+                        .add_text(input_path.as_path().to_str().unwrap())
+                        .size(16 * 2),
+                )
+                .numbering(NumberingId::new(2), IndentLevel::new(0))
+                .size(16 * 2),
+        );
+        let lines: Vec<String> = fs::read_to_string(input_path)
+            .unwrap()
+            .split("\n")
+            .map(str::to_string)
+            .collect();
+        for line in lines {
+            *self = self
+                .to_owned()
+                .add_paragraph(Paragraph::new().add_run(Run::new().add_text(line)));
+        }
+
+        Ok(())
+    }
+}
+
+// fn gen_file(input_path: PathBuf, doc: &mut Docx) -> Result<(), DocxError> {
+//     *doc = doc.to_owned().add_paragraph(
+//         Paragraph::new()
+//             .add_run(
+//                 Run::new()
+//                     .add_text(input_path.as_path().to_str().unwrap())
+//                     .size(16 * 2),
+//             )
+//             .numbering(NumberingId::new(2), IndentLevel::new(0))
+//             .size(16 * 2),
+//     );
+//     let lines: Vec<String> = fs::read_to_string(input_path)
+//         .unwrap()
+//         .split("\n")
+//         .map(str::to_string)
+//         .collect();
+//     for line in lines {
+//         *doc = doc
+//             .to_owned()
+//             .add_paragraph(Paragraph::new().add_run(Run::new().add_text(line)));
+//     }
+
+//     Ok(())
+// }
