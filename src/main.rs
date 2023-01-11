@@ -43,7 +43,8 @@ fn main() {
     let mut paths: Vec<PathBuf> = vec![];
 
     for file_extension in file_extensions {
-        for entry in glob(&("./**/**/**/**/**/**/**/*.".to_owned() + &file_extension))
+        let pat = String::from(format!("{}{}","./**/*.",file_extension));
+        for entry in glob(pat.as_str())
             .expect("Failed to read glob pattern")
         {
             match entry {
@@ -55,6 +56,7 @@ fn main() {
             }
         }
     }
+    
     doc.gen_table(&paths).expect("Error generating table");
     doc.gen_body_with_list(&paths)
         .expect("Error generating body");
@@ -151,7 +153,7 @@ impl GenFile for Docx {
 
 fn get_file_text(input_path: &PathBuf) -> Vec<String> {
     fs::read_to_string(input_path)
-        .unwrap()
+        .unwrap_or("Not a file".to_owned())
         .split("\n")
         .map(str::to_string)
         .collect()
