@@ -1,14 +1,13 @@
 use std::{fs, path::PathBuf};
 
 use clap::Parser;
-use docx_rs::{Docx, DocxError, IndentLevel, NumberingId, Paragraph, Run};
+use docx_rs::{
+    Docx, DocxError, IndentLevel, NumberingId, Paragraph, Run, Table, TableCell, TableRow,
+};
 use glob::glob;
 
-//TODO Doc model
-//TODO Doc generation
-
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None, arg_required_else_help = true)]
+#[command(author, version, about, long_about = None, arg_required_else_help = false)]
 struct Args {
     /// Расширения файлов. Пример code_report_rs rs js
     file_extensions: Vec<String>,
@@ -39,8 +38,10 @@ fn main() {
         }
         file_extensions.dedup();
     }
-    
+
     let mut doc = Docx::new();
+    let mut paths: Vec<PathBuf> = vec![];
+
     for file_extension in file_extensions {
         for entry in glob(&("./**/**/**/**/**/**/**/*.".to_owned() + &file_extension))
             .expect("Failed to read glob pattern")
@@ -48,21 +49,78 @@ fn main() {
             match entry {
                 Ok(path) => {
                     println!("{:?}", path.to_str().unwrap());
-                    println!("{:?}", doc.gen_body(path));
+                    paths.push(path);
                 }
                 Err(e) => println!("{:?}", e),
             }
         }
     }
-    let path = std::path::Path::new("./numbering.docx");
-    let file = fs::File::create(path).unwrap_or(fs::File::open(path).unwrap());
-    doc.to_owned().build().pack(file).unwrap();
+    doc.gen_table(&paths).expect("Error generating table");
+    doc.gen_body_with_list(&paths)
+        .expect("Error generating body");
+    doc.save_in_file(&String::from("./report.docx"))
+        .expect("Error saving file");
 }
 
 trait GenFile {
+    fn gen_table(&mut self, inputs: &Vec<PathBuf>) -> Result<(), DocxError>;
+    fn gen_body_with_list(&mut self, inputs: &Vec<PathBuf>) -> Result<(), DocxError>;
     fn gen_body(&mut self, input_path: PathBuf) -> Result<(), DocxError>;
+    fn save_in_file(&self, path: &String) -> Result<(), std::io::Error>;
 }
 impl GenFile for Docx {
+    fn gen_table(&mut self, inputs: &Vec<PathBuf>) -> Result<(), DocxError> {
+        let mut table = Table::new(vec![TableRow::new(vec![
+            TableCell::new()
+                .add_paragraph(Paragraph::new().add_run(Run::new().add_text("Имя файла").size(12*2))),
+            TableCell::new()
+                .add_paragraph(Paragraph::new().add_run(Run::new().add_text("Количество строк кода").size(12*2))),
+            TableCell::new()
+                .add_paragraph(Paragraph::new().add_run(Run::new().add_text("Размер (Кбайт)").size(12*2))),
+        ])]);
+
+        for path in inputs {
+            println!("{}", path.as_os_str().to_str().unwrap());
+            table =
+                table.add_row(TableRow::new(vec![
+                    TableCell::new().add_paragraph(
+                        Paragraph::new()
+                            .add_run(Run::new().add_text(path.as_os_str().to_str().unwrap()).size(12*2)),
+                    ),
+                    TableCell::new().add_paragraph(
+                        Paragraph::new()
+                            .add_run(Run::new().add_text(get_file_text(&path).len().to_string()).size(12*2)),
+                    ),
+                    TableCell::new().add_paragraph(Paragraph::new().add_run(
+                        Run::new().add_text(format!("{:.2}",fs::metadata(path).unwrap().len()/1024)).size(12*2),
+                    )),
+                ]));
+        }
+        *self = self.to_owned().add_table(table);
+        Ok(())
+    }
+    fn gen_body_with_list(&mut self, inputs: &Vec<PathBuf>) -> Result<(), DocxError> {
+        for input in inputs {
+            *self = self.to_owned().add_paragraph(
+                Paragraph::new()
+                    .add_run(
+                        Run::new()
+                            .add_text(input.as_path().to_str().unwrap())
+                            .size(16 * 2),
+                    )
+                    .numbering(NumberingId::new(2), IndentLevel::new(0))
+                    .size(16 * 2),
+            );
+            let lines: Vec<String> = get_file_text(&input);
+            for line in lines {
+                *self = self
+                    .to_owned()
+                    .add_paragraph(Paragraph::new().add_run(Run::new().add_text(line)));
+            }
+        }
+        Ok(())
+    }
+
     fn gen_body(&mut self, input_path: PathBuf) -> Result<(), DocxError> {
         *self = self.to_owned().add_paragraph(
             Paragraph::new()
@@ -74,42 +132,27 @@ impl GenFile for Docx {
                 .numbering(NumberingId::new(2), IndentLevel::new(0))
                 .size(16 * 2),
         );
-        let lines: Vec<String> = fs::read_to_string(input_path)
-            .unwrap()
-            .split("\n")
-            .map(str::to_string)
-            .collect();
+        let lines: Vec<String> = get_file_text(&input_path);
         for line in lines {
             *self = self
                 .to_owned()
                 .add_paragraph(Paragraph::new().add_run(Run::new().add_text(line)));
         }
+        Ok(())
+    }
 
+    fn save_in_file(&self, input_path: &String) -> Result<(), std::io::Error> {
+        let path = std::path::Path::new(input_path);
+        let file = fs::File::create(path).unwrap_or(fs::File::open(path)?);
+        self.to_owned().build().pack(file)?;
         Ok(())
     }
 }
 
-// fn gen_file(input_path: PathBuf, doc: &mut Docx) -> Result<(), DocxError> {
-//     *doc = doc.to_owned().add_paragraph(
-//         Paragraph::new()
-//             .add_run(
-//                 Run::new()
-//                     .add_text(input_path.as_path().to_str().unwrap())
-//                     .size(16 * 2),
-//             )
-//             .numbering(NumberingId::new(2), IndentLevel::new(0))
-//             .size(16 * 2),
-//     );
-//     let lines: Vec<String> = fs::read_to_string(input_path)
-//         .unwrap()
-//         .split("\n")
-//         .map(str::to_string)
-//         .collect();
-//     for line in lines {
-//         *doc = doc
-//             .to_owned()
-//             .add_paragraph(Paragraph::new().add_run(Run::new().add_text(line)));
-//     }
-
-//     Ok(())
-// }
+fn get_file_text(input_path: &PathBuf) -> Vec<String> {
+    fs::read_to_string(input_path)
+        .unwrap()
+        .split("\n")
+        .map(str::to_string)
+        .collect()
+}
