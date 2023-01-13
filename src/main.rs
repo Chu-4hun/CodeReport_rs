@@ -4,7 +4,8 @@ use clap::Parser;
 use docx_rs::{
     Docx, DocxError, IndentLevel, NumberingId, Paragraph, Run, Table, TableCell, TableRow,
 };
-use glob::glob;
+// use glob::glob;
+use walkdir::WalkDir;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None, arg_required_else_help = false)]
@@ -42,19 +43,17 @@ fn main() {
     let mut doc = Docx::new();
     let mut paths: Vec<PathBuf> = vec![];
 
-    for file_extension in file_extensions {
-        for entry in glob(&("./**/**/**/**/**/**/**/*.".to_owned() + &file_extension))
-            .expect("Failed to read glob pattern")
-        {
-            match entry {
-                Ok(path) => {
-                    println!("{:?}", path.to_str().unwrap());
-                    paths.push(path);
-                }
-                Err(e) => println!("{:?}", e),
+    for e in WalkDir::new("./").into_iter().filter_map(|e| e.ok()) {
+        if e.metadata().unwrap().is_file() {
+            if file_extensions
+                .contains(&e.path().extension().unwrap_or_default().to_str().unwrap().to_owned())
+            {
+                println!("{}", e.path().display());
+                paths.push(e.path().to_path_buf());
             }
         }
     }
+
     doc.gen_table(&paths).expect("Error generating table");
     doc.gen_body_with_list(&paths)
         .expect("Error generating body");
@@ -71,30 +70,42 @@ trait GenFile {
 impl GenFile for Docx {
     fn gen_table(&mut self, inputs: &Vec<PathBuf>) -> Result<(), DocxError> {
         let mut table = Table::new(vec![TableRow::new(vec![
-            TableCell::new()
-                .add_paragraph(Paragraph::new().add_run(Run::new().add_text("Имя файла").size(12*2))),
-            TableCell::new()
-                .add_paragraph(Paragraph::new().add_run(Run::new().add_text("Количество строк кода").size(12*2))),
-            TableCell::new()
-                .add_paragraph(Paragraph::new().add_run(Run::new().add_text("Размер (Кбайт)").size(12*2))),
+            TableCell::new().add_paragraph(
+                Paragraph::new().add_run(Run::new().add_text("Имя файла").size(12 * 2)),
+            ),
+            TableCell::new().add_paragraph(
+                Paragraph::new().add_run(Run::new().add_text("Количество строк кода").size(12 * 2)),
+            ),
+            TableCell::new().add_paragraph(
+                Paragraph::new().add_run(Run::new().add_text("Размер (Кбайт)").size(12 * 2)),
+            ),
         ])]);
 
         for path in inputs {
             println!("{}", path.as_os_str().to_str().unwrap());
-            table =
-                table.add_row(TableRow::new(vec![
-                    TableCell::new().add_paragraph(
-                        Paragraph::new()
-                            .add_run(Run::new().add_text(path.as_os_str().to_str().unwrap()).size(12*2)),
+            table = table.add_row(TableRow::new(vec![
+                TableCell::new().add_paragraph(
+                    Paragraph::new().add_run(
+                        Run::new()
+                            .add_text(path.as_os_str().to_str().unwrap())
+                            .size(12 * 2),
                     ),
-                    TableCell::new().add_paragraph(
-                        Paragraph::new()
-                            .add_run(Run::new().add_text(get_file_text(&path).len().to_string()).size(12*2)),
+                ),
+                TableCell::new().add_paragraph(
+                    Paragraph::new().add_run(
+                        Run::new()
+                            .add_text(get_file_text(&path).len().to_string())
+                            .size(12 * 2),
                     ),
-                    TableCell::new().add_paragraph(Paragraph::new().add_run(
-                        Run::new().add_text(format!("{:.2}",fs::metadata(path).unwrap().len()/1024)).size(12*2),
-                    )),
-                ]));
+                ),
+                TableCell::new().add_paragraph(
+                    Paragraph::new().add_run(
+                        Run::new()
+                            .add_text(format!("{:.2}", fs::metadata(path).unwrap().len() / 1024))
+                            .size(12 * 2),
+                    ),
+                ),
+            ]));
         }
         *self = self.to_owned().add_table(table);
         Ok(())
@@ -111,12 +122,10 @@ impl GenFile for Docx {
                     .numbering(NumberingId::new(2), IndentLevel::new(0))
                     .size(16 * 2),
             );
-            let lines: Vec<String> = get_file_text(&input);
-            for line in lines {
-                *self = self
-                    .to_owned()
-                    .add_paragraph(Paragraph::new().add_run(Run::new().add_text(line)));
-            }
+            let line = fs::read_to_string(input).expect("Error reading file");
+            *self = self
+                .to_owned()
+                .add_paragraph(Paragraph::new().add_run(Run::new().add_text(line)));
         }
         Ok(())
     }
@@ -132,12 +141,7 @@ impl GenFile for Docx {
                 .numbering(NumberingId::new(2), IndentLevel::new(0))
                 .size(16 * 2),
         );
-        let lines: Vec<String> = get_file_text(&input_path);
-        for line in lines {
-            *self = self
-                .to_owned()
-                .add_paragraph(Paragraph::new().add_run(Run::new().add_text(line)));
-        }
+
         Ok(())
     }
 
