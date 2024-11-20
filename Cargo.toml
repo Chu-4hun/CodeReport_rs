@@ -12,3 +12,10 @@ docx-rs = "0.4"
 glob = "0.3.1"
 rand = "0.8.5"
 walkdir = "2.3.2"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "code_report_rs"
+path = "src/main.rs"

@@ -1,11 +1,5 @@
-use std::{fs, path::PathBuf};
-
 use clap::Parser;
-use docx_rs::{
-    Docx, DocxError, IndentLevel, NumberingId, Paragraph, Run, Table, TableCell, TableRow,
-};
-// use glob::glob;
-use walkdir::WalkDir;
+use code_report_rs::ReportGen;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None, arg_required_else_help = false)]
@@ -20,7 +14,7 @@ struct Args {
     use_defaut_values: bool,
 }
 
-fn main() {
+fn main() -> Result<(), std::io::Error> {
     let args = Args::parse();
     let mut file_extensions = vec![
         String::from("rs"),
@@ -40,141 +34,7 @@ fn main() {
         file_extensions.dedup();
     }
 
-    let mut doc = Docx::new();
-    let mut paths: Vec<PathBuf> = vec![];
-
-    for e in WalkDir::new("./").into_iter().filter_map(|e| e.ok()) {
-        if e.metadata().unwrap().is_file()
-            && file_extensions.contains(
-                &e.path()
-                    .extension()
-                    .unwrap_or_default()
-                    .to_str()
-                    .unwrap()
-                    .to_owned(),
-            )
-        {
-            println!("{}", e.path().display());
-            paths.push(e.path().to_path_buf());
-        }
-    }
-
-    doc.gen_table(&paths).expect("Error generating table");
-    doc.gen_body_with_list(&paths)
-        .expect("Error generating body");
-    doc.save_in_file(&String::from("./report.docx"))
-        .expect("Error saving file");
-}
-
-trait GenFile {
-    fn gen_table(&mut self, inputs: &[PathBuf]) -> Result<(), DocxError>;
-    fn gen_body_with_list(&mut self, inputs: &[PathBuf]) -> Result<(), DocxError>;
-    fn gen_body(&mut self, input_path: PathBuf) -> Result<(), DocxError>;
-    fn save_in_file(&self, path: &str) -> Result<(), std::io::Error>;
-}
-impl GenFile for Docx {
-    fn gen_table(&mut self, inputs: &[PathBuf]) -> Result<(), DocxError> {
-        let mut table = Table::new(vec![TableRow::new(vec![
-            TableCell::new().add_paragraph(
-                Paragraph::new().add_run(Run::new().add_text("Имя файла").size(12 * 2)),
-            ),
-            TableCell::new().add_paragraph(
-                Paragraph::new().add_run(Run::new().add_text("Количество строк кода").size(12 * 2)),
-            ),
-            TableCell::new().add_paragraph(
-                Paragraph::new().add_run(Run::new().add_text("Размер (Кбайт)").size(12 * 2)),
-            ),
-        ])]);
-
-        for path in inputs {
-            println!("{}", path.as_os_str().to_str().unwrap());
-            table = table.add_row(TableRow::new(vec![
-                TableCell::new().add_paragraph(
-                    Paragraph::new().add_run(
-                        Run::new()
-                            .add_text(path.as_os_str().to_str().unwrap())
-                            .size(12 * 2),
-                    ),
-                ),
-                TableCell::new().add_paragraph(
-                    Paragraph::new().add_run(
-                        Run::new()
-                            .add_text(get_file_text(path).len().to_string())
-                            .size(12 * 2),
-                    ),
-                ),
-                TableCell::new().add_paragraph(
-                    Paragraph::new().add_run(
-                        Run::new()
-                            .add_text(format!("{:.2}", fs::metadata(path).unwrap().len() / 1024))
-                            .size(12 * 2),
-                    ),
-                ),
-            ]));
-        }
-        *self = self.to_owned().add_table(table);
-        Ok(())
-    }
-    fn gen_body_with_list(&mut self, inputs: &[PathBuf]) -> Result<(), DocxError> {
-        for input in inputs {
-            let line = fs::read_to_string(input).expect("Error reading file");
-            //    let mut f = std::fs::File::create("test.txt").unwrap();
-            //     f.write_all(line.as_bytes()).unwrap();
-            let lines: Vec<&str> = line.split('\n').collect();
-
-            // Add initial paragraph with file path
-            *self = self.to_owned().add_paragraph(
-                Paragraph::new()
-                    .add_run(
-                        Run::new()
-                            .add_text(input.as_path().to_str().unwrap())
-                            .size(16 * 2),
-                    )
-                    .numbering(NumberingId::new(2), IndentLevel::new(0))
-                    .size(16 * 2),
-            );
-
-            // Add each line as a separate paragraph
-            for line in lines {
-                if !line.is_empty() {
-                    *self = self.to_owned().add_paragraph(
-                        Paragraph::new()
-                            .add_run(Run::new().add_text(line))
-                            .size(16 * 2),
-                    );
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn gen_body(&mut self, input_path: PathBuf) -> Result<(), DocxError> {
-        *self = self.to_owned().add_paragraph(
-            Paragraph::new()
-                .add_run(
-                    Run::new()
-                        .add_text(input_path.as_path().to_str().unwrap())
-                        .size(16 * 2),
-                )
-                .numbering(NumberingId::new(2), IndentLevel::new(0))
-                .size(16 * 2),
-        );
-
-        Ok(())
-    }
-
-    fn save_in_file(&self, input_path: &str) -> Result<(), std::io::Error> {
-        let path = std::path::Path::new(input_path);
-        let file = fs::File::create(path).unwrap_or(fs::File::open(path)?);
-        self.to_owned().build().pack(file)?;
-        Ok(())
-    }
-}
-
-fn get_file_text(input_path: &PathBuf) -> Vec<String> {
-    fs::read_to_string(input_path)
+    ReportGen::new_from_path("./", &file_extensions)
         .unwrap()
-        .split('\n')
-        .map(str::to_string)
-        .collect()
+        .save_file("./report.docx")
 }
