@@ -44,13 +44,18 @@ fn main() {
     let mut paths: Vec<PathBuf> = vec![];
 
     for e in WalkDir::new("./").into_iter().filter_map(|e| e.ok()) {
-        if e.metadata().unwrap().is_file() {
-            if file_extensions
-                .contains(&e.path().extension().unwrap_or_default().to_str().unwrap().to_owned())
-            {
-                println!("{}", e.path().display());
-                paths.push(e.path().to_path_buf());
-            }
+        if e.metadata().unwrap().is_file()
+            && file_extensions.contains(
+                &e.path()
+                    .extension()
+                    .unwrap_or_default()
+                    .to_str()
+                    .unwrap()
+                    .to_owned(),
+            )
+        {
+            println!("{}", e.path().display());
+            paths.push(e.path().to_path_buf());
         }
     }
 
@@ -62,13 +67,13 @@ fn main() {
 }
 
 trait GenFile {
-    fn gen_table(&mut self, inputs: &Vec<PathBuf>) -> Result<(), DocxError>;
-    fn gen_body_with_list(&mut self, inputs: &Vec<PathBuf>) -> Result<(), DocxError>;
+    fn gen_table(&mut self, inputs: &[PathBuf]) -> Result<(), DocxError>;
+    fn gen_body_with_list(&mut self, inputs: &[PathBuf]) -> Result<(), DocxError>;
     fn gen_body(&mut self, input_path: PathBuf) -> Result<(), DocxError>;
-    fn save_in_file(&self, path: &String) -> Result<(), std::io::Error>;
+    fn save_in_file(&self, path: &str) -> Result<(), std::io::Error>;
 }
 impl GenFile for Docx {
-    fn gen_table(&mut self, inputs: &Vec<PathBuf>) -> Result<(), DocxError> {
+    fn gen_table(&mut self, inputs: &[PathBuf]) -> Result<(), DocxError> {
         let mut table = Table::new(vec![TableRow::new(vec![
             TableCell::new().add_paragraph(
                 Paragraph::new().add_run(Run::new().add_text("Имя файла").size(12 * 2)),
@@ -94,7 +99,7 @@ impl GenFile for Docx {
                 TableCell::new().add_paragraph(
                     Paragraph::new().add_run(
                         Run::new()
-                            .add_text(get_file_text(&path).len().to_string())
+                            .add_text(get_file_text(path).len().to_string())
                             .size(12 * 2),
                     ),
                 ),
@@ -110,8 +115,14 @@ impl GenFile for Docx {
         *self = self.to_owned().add_table(table);
         Ok(())
     }
-    fn gen_body_with_list(&mut self, inputs: &Vec<PathBuf>) -> Result<(), DocxError> {
+    fn gen_body_with_list(&mut self, inputs: &[PathBuf]) -> Result<(), DocxError> {
         for input in inputs {
+            let line = fs::read_to_string(input).expect("Error reading file");
+            //    let mut f = std::fs::File::create("test.txt").unwrap();
+            //     f.write_all(line.as_bytes()).unwrap();
+            let lines: Vec<&str> = line.split('\n').collect();
+
+            // Add initial paragraph with file path
             *self = self.to_owned().add_paragraph(
                 Paragraph::new()
                     .add_run(
@@ -122,10 +133,17 @@ impl GenFile for Docx {
                     .numbering(NumberingId::new(2), IndentLevel::new(0))
                     .size(16 * 2),
             );
-            let line = fs::read_to_string(input).expect("Error reading file");
-            *self = self
-                .to_owned()
-                .add_paragraph(Paragraph::new().add_run(Run::new().add_text(line)));
+
+            // Add each line as a separate paragraph
+            for line in lines {
+                if !line.is_empty() {
+                    *self = self.to_owned().add_paragraph(
+                        Paragraph::new()
+                            .add_run(Run::new().add_text(line))
+                            .size(16 * 2),
+                    );
+                }
+            }
         }
         Ok(())
     }
@@ -145,7 +163,7 @@ impl GenFile for Docx {
         Ok(())
     }
 
-    fn save_in_file(&self, input_path: &String) -> Result<(), std::io::Error> {
+    fn save_in_file(&self, input_path: &str) -> Result<(), std::io::Error> {
         let path = std::path::Path::new(input_path);
         let file = fs::File::create(path).unwrap_or(fs::File::open(path)?);
         self.to_owned().build().pack(file)?;
@@ -156,7 +174,7 @@ impl GenFile for Docx {
 fn get_file_text(input_path: &PathBuf) -> Vec<String> {
     fs::read_to_string(input_path)
         .unwrap()
-        .split("\n")
+        .split('\n')
         .map(str::to_string)
         .collect()
 }
