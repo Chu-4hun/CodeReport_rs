@@ -102,9 +102,8 @@ impl GenFile for Docx {
     }
     fn gen_body_with_list(&mut self, inputs: &[PathBuf]) -> Result<(), DocxError> {
         for input in inputs {
+            let code_cell = TableCell::new().width(10000, docx_rs::WidthType::Dxa);
             let line = fs::read_to_string(input).expect("Error reading file");
-            //    let mut f = std::fs::File::create("test.txt").unwrap();
-            //     f.write_all(line.as_bytes()).unwrap();
             let lines: Vec<&str> = line.split('\n').collect();
 
             // Add initial paragraph with file path
@@ -118,17 +117,19 @@ impl GenFile for Docx {
                     .numbering(NumberingId::new(2), IndentLevel::new(0))
                     .size(16 * 2),
             );
-
-            // Add each line as a separate paragraph
+            let mut p =  Paragraph::new();
             for line in lines {
-                if !line.is_empty() {
-                    *self = self.to_owned().add_paragraph(
-                        Paragraph::new()
-                            .add_run(Run::new().add_text(line))
-                            .size(16 * 2),
-                    );
-                }
+                p = p.add_run(Run::new().add_text(line).add_break(docx_rs::BreakType::TextWrapping))
+                    .size(16 * 2)
+
             }
+
+           let code_cell = code_cell.add_paragraph(
+               p,
+            );
+           
+            let table = Table::new(vec![TableRow::new(vec![code_cell])]);
+            *self = self.to_owned().add_table(table);
         }
         Ok(())
     }
