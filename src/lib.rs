@@ -112,22 +112,25 @@ impl GenFile for Docx {
                     .add_run(
                         Run::new()
                             .add_text(input.as_path().to_str().unwrap())
-                            .size(16 * 2),
+                            .size(14 * 2),
                     )
                     .numbering(NumberingId::new(2), IndentLevel::new(0))
                     .size(16 * 2),
             );
-            let mut p =  Paragraph::new();
+            let mut p = Paragraph::new();
             for line in lines {
-                p = p.add_run(Run::new().add_text(line).add_break(docx_rs::BreakType::TextWrapping))
+                p = p
+                    .add_run(
+                        Run::new()
+                            .add_text(line)
+                            .add_break(docx_rs::BreakType::TextWrapping)
+                            .size(12 * 2),
+                    )
                     .size(16 * 2)
-
             }
 
-           let code_cell = code_cell.add_paragraph(
-               p,
-            );
-           
+            let code_cell = code_cell.add_paragraph(p);
+
             let table = Table::new(vec![TableRow::new(vec![code_cell])]);
             *self = self.to_owned().add_table(table);
         }
